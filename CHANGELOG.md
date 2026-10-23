@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.8.1 — 2026-10-23
+- README screenshots (docs/screenshots, simulated data in example buildings).
+- Fix: Website dashboard "Failed checks per hour" and "Recent failures" panels failed (Flux type conflicts).
+- Fix: Sensor Health drift check treated same-named rooms in different buildings (e.g. two "Stacks") as one room.
+
 ## 0.8.0 — 2026-10-23 (not yet deployed: Pi offline)
 - Website monitor: `webmon/webmon.py` (stdlib, compose service `webmon`, uid 1000, no ports/secrets) downloads the
   images in `registry/web_targets.csv` on a randomised schedule (interval ± jitter, serial), records DNS / connect /

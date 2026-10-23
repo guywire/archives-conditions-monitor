@@ -285,7 +285,7 @@
             "type": "influxdb",
             "uid": "archmon-influx"
           },
-          "query": "base = from(bucket: \"environment_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"environment\" and (r._field == \"temperature_c\" or r._field == \"humidity_rh\") and r.room_type != \"test\" and r.room_type != \"unregistered\")\nstats = base\n  |> group(columns: [\"room\", \"sensor_id\", \"_field\"])\n  |> reduce(identity: {s: 0.0, s2: 0.0, n: 0.0, mx: -1000.0}, fn: (r, accumulator) => ({s: accumulator.s + r._value,\n      s2: accumulator.s2 + r._value * r._value, n: accumulator.n + 1.0, mx: if r._value > accumulator.mx then r._value else accumulator.mx}))\n  |> map(fn: (r) => ({r with mean: r.s / r.n, sd: if r.n > 1.0 then (r.s2 - r.s * r.s / r.n) / (r.n - 1.0) else 0.0}))\nrooms = stats\n  |> group(columns: [\"room\", \"_field\"])\n  |> reduce(identity: {rs: 0.0, rn: 0.0}, fn: (r, accumulator) => ({rs: accumulator.rs + r.mean, rn: accumulator.rn + 1.0}))\njoin(tables: {s: stats, r: rooms}, on: [\"room\", \"_field\"])\n  |> map(fn: (r) => ({room: r.room, sensor_id: r.sensor_id, _field: r._field, n: r.n, max: r.mx, var: r.sd,\n      dev: if r.rn > 1.0 then r.mean - (r.rs - r.mean) / (r.rn - 1.0) else 0.0, peers: r.rn - 1.0}))\n  |> group()\n  |> pivot(rowKey: [\"room\", \"sensor_id\", \"peers\"], columnKey: [\"_field\"], valueColumn: \"dev\")\n  |> rename(columns: {temperature_c: \"dev_t\", humidity_rh: \"dev_h\"})\n"
+          "query": "base = from(bucket: \"environment_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"environment\" and (r._field == \"temperature_c\" or r._field == \"humidity_rh\") and r.room_type != \"test\" and r.room_type != \"unregistered\")\nstats = base\n  |> group(columns: [\"building\", \"room\", \"sensor_id\", \"_field\"])\n  |> reduce(identity: {s: 0.0, s2: 0.0, n: 0.0, mx: -1000.0}, fn: (r, accumulator) => ({s: accumulator.s + r._value,\n      s2: accumulator.s2 + r._value * r._value, n: accumulator.n + 1.0, mx: if r._value > accumulator.mx then r._value else accumulator.mx}))\n  |> map(fn: (r) => ({r with mean: r.s / r.n, sd: if r.n > 1.0 then (r.s2 - r.s * r.s / r.n) / (r.n - 1.0) else 0.0}))\nrooms = stats\n  |> group(columns: [\"building\", \"room\", \"_field\"])\n  |> reduce(identity: {rs: 0.0, rn: 0.0}, fn: (r, accumulator) => ({rs: accumulator.rs + r.mean, rn: accumulator.rn + 1.0}))\njoin(tables: {s: stats, r: rooms}, on: [\"building\", \"room\", \"_field\"])\n  |> map(fn: (r) => ({building: r.building, room: r.room, sensor_id: r.sensor_id, _field: r._field, n: r.n, max: r.mx, var: r.sd,\n      dev: if r.rn > 1.0 then r.mean - (r.rs - r.mean) / (r.rn - 1.0) else 0.0, peers: r.rn - 1.0}))\n  |> group()\n  |> pivot(rowKey: [\"building\", \"room\", \"sensor_id\", \"peers\"], columnKey: [\"_field\"], valueColumn: \"dev\")\n  |> rename(columns: {temperature_c: \"dev_t\", humidity_rh: \"dev_h\"})\n"
         },
         {
           "refId": "B",
@@ -308,12 +308,13 @@
           "id": "organize",
           "options": {
             "indexByName": {
-              "room": 0,
-              "sensor_id": 1,
-              "peers": 2,
-              "dev_t": 3,
-              "dev_h": 4,
-              "check": 5
+              "building": 0,
+              "room": 1,
+              "sensor_id": 2,
+              "peers": 3,
+              "dev_t": 4,
+              "dev_h": 5,
+              "check": 6
             }
           }
         }
@@ -323,6 +324,18 @@
           "decimals": 2
         },
         "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "building"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Building"
+              }
+            ]
+          },
           {
             "matcher": {
               "id": "byName",

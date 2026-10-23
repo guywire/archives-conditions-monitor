@@ -1,10 +1,43 @@
-# Archival Conditions Monitor
+# Archives Conditions Monitor
 
 Monitors temperature and relative humidity in archive storage rooms, compares each room with archival targets,
-and alerts staff by phone (ntfy). Runs on a Raspberry Pi 5 with Mosquitto (MQTT), Telegraf, InfluxDB and Grafana in Docker.
+and alerts staff by phone (ntfy). Also covers water-leak probes, air quality (PM2.5/PM10, CO2, VOC, NOx) and the
+download speed of images on the organisation's website. Runs on a Raspberry Pi 5 with Mosquitto (MQTT), Telegraf,
+InfluxDB and Grafana in Docker.
 
-- Requirements: https://claude.ai/code/artifact/6d8efa7b-0632-405d-9ed2-1bbfcc2cb5a0
-- Current state, versions and to-dos: [STATUS.md](STATUS.md) · history: [CHANGELOG.md](CHANGELOG.md)
+History: [CHANGELOG.md](CHANGELOG.md). Site status and to-dos are kept in a local-only STATUS.md.
+
+## Screenshots
+
+Simulated sensors in example buildings (the built-in simulator), not a real site.
+
+**Overview**: current status of every room, status history, temperature / RH / dew point trends, and the alarm rules.
+![Overview dashboard](docs/screenshots/overview.png)
+
+<details><summary><b>Room Detail</b>: one room against its target band, 24 h RH swing, leak and air-quality sensors</summary>
+
+![Room Detail dashboard](docs/screenshots/room-detail.png)
+</details>
+
+<details><summary><b>Monthly Report</b>: time in range, time in alarm, extremes, preservation index (TWPI), mould-risk hours</summary>
+
+![Monthly Report dashboard](docs/screenshots/monthly-report.png)
+</details>
+
+<details><summary><b>Leaks &amp; Air Quality</b>: leak probe history, particles, CO2, VOC and NOx with watch/alarm limits</summary>
+
+![Leaks and Air Quality dashboard](docs/screenshots/leaks-air-quality.png)
+</details>
+
+<details><summary><b>Sensor Health</b>: last report, Wi-Fi signal, uptime, drift between sensors in the same room, stuck-sensor checks</summary>
+
+![Sensor Health dashboard](docs/screenshots/sensor-health.png)
+</details>
+
+<details><summary><b>Website</b>: image download time, speed, where the time goes (DNS, connect, TLS, server, transfer) and failures</summary>
+
+![Website dashboard](docs/screenshots/website.png)
+</details>
 
 ## Everyday use
 

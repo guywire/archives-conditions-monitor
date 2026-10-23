@@ -344,17 +344,17 @@ def drift_panel(y):
     """Plausibility + peer comparison per sensor over the last 6 h."""
     flux = (f'base = from(bucket: "{B}")\n  |> range(start: -6h)\n'
             f'  |> filter(fn: (r) => r._measurement == "environment" and (r._field == "temperature_c" or r._field == "humidity_rh") and {EXCL})\n'
-            'stats = base\n  |> group(columns: ["room", "sensor_id", "_field"])\n'
+            'stats = base\n  |> group(columns: ["building", "room", "sensor_id", "_field"])\n'
             '  |> reduce(identity: {s: 0.0, s2: 0.0, n: 0.0, mx: -1000.0}, fn: (r, accumulator) => ({s: accumulator.s + r._value,\n'
             '      s2: accumulator.s2 + r._value * r._value, n: accumulator.n + 1.0, mx: if r._value > accumulator.mx then r._value else accumulator.mx}))\n'
             '  |> map(fn: (r) => ({r with mean: r.s / r.n, sd: if r.n > 1.0 then (r.s2 - r.s * r.s / r.n) / (r.n - 1.0) else 0.0}))\n'
-            'rooms = stats\n  |> group(columns: ["room", "_field"])\n'
+            'rooms = stats\n  |> group(columns: ["building", "room", "_field"])\n'
             '  |> reduce(identity: {rs: 0.0, rn: 0.0}, fn: (r, accumulator) => ({rs: accumulator.rs + r.mean, rn: accumulator.rn + 1.0}))\n'
-            'join(tables: {s: stats, r: rooms}, on: ["room", "_field"])\n'
-            '  |> map(fn: (r) => ({room: r.room, sensor_id: r.sensor_id, _field: r._field, n: r.n, max: r.mx, var: r.sd,\n'
+            'join(tables: {s: stats, r: rooms}, on: ["building", "room", "_field"])\n'
+            '  |> map(fn: (r) => ({building: r.building, room: r.room, sensor_id: r.sensor_id, _field: r._field, n: r.n, max: r.mx, var: r.sd,\n'
             '      dev: if r.rn > 1.0 then r.mean - (r.rs - r.mean) / (r.rn - 1.0) else 0.0, peers: r.rn - 1.0}))\n'
             '  |> group()\n'
-            '  |> pivot(rowKey: ["room", "sensor_id", "peers"], columnKey: ["_field"], valueColumn: "dev")\n'
+            '  |> pivot(rowKey: ["building", "room", "sensor_id", "peers"], columnKey: ["_field"], valueColumn: "dev")\n'
             '  |> rename(columns: {temperature_c: "dev_t", humidity_rh: "dev_h"})\n')
     # second query for plausibility flags, kept simple and joined in Grafana by sensor_id
     flags = (f'from(bucket: "{B}")\n  |> range(start: -6h)\n'
@@ -375,7 +375,7 @@ def drift_panel(y):
             "targets": [q(flux, "A"), q(flags, "B")],
             "transformations": [{"id": "joinByField", "options": {"byField": "sensor_id", "mode": "outer"}}],
             "fieldConfig": {"defaults": {"decimals": 2}, "overrides": [
-                by_name("room", ("displayName", "Room")), by_name("sensor_id", ("displayName", "Sensor")),
+                by_name("building", ("displayName", "Building")), by_name("room", ("displayName", "Room")), by_name("sensor_id", ("displayName", "Sensor")),
                 by_name("peers", ("displayName", "Peers in room"), ("decimals", 0)),
                 by_name("dev_t", ("displayName", "Temp deviation (°C)"), ("thresholds", devthr(0.7, 1.0)), ("custom.cellOptions", {"type": "color-text"})),
                 by_name("dev_h", ("displayName", "RH deviation (%)"), ("thresholds", devthr(3, 4)), ("custom.cellOptions", {"type": "color-text"})),
@@ -542,7 +542,7 @@ COLUMN_ORDER = {
     "Room compliance for the selected period": ["building", "floor", "room", "pct_ok", "pct_alarm", "t_mean", "t_min", "t_max",
                                                 "h_mean", "h_min", "h_max", "mould_h", "twpi", "coverage_d"],
     "Sensors": ["room", "sensor_id", "device_id", "age_min", "signal", "uptime_s"],
-    "Drift and plausibility (last 6 h)": ["room", "sensor_id", "peers", "dev_t", "dev_h", "check"],
+    "Drift and plausibility (last 6 h)": ["building", "room", "sensor_id", "peers", "dev_t", "dev_h", "check"],
     "Website images": ["target", "last_ok", "last_status", "med_ms", "p95_ms", "ttfb", "speed", "size", "pct_ok", "checks", "age_min", "host"],
     "Recent failures": ["_time", "target", "status", "error"],
 }
@@ -628,10 +628,12 @@ def website():
               '  |> group(columns: ["_field"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n'
               '  |> map(fn: (r) => ({r with _field: if r._field == "dns_ms" then "1 DNS lookup" else if r._field == "connect_ms" then "2 Connect"\n'
               '      else if r._field == "tls_ms" then "3 TLS handshake" else if r._field == "ttfb_ms" then "4 Server wait" else "5 Transfer"}))')
-    fails = (base + '  |> filter(fn: (r) => r._field == "ok")\n  |> map(fn: (r) => ({r with _value: 1 - r._value}))\n'
-             '  |> group(columns: ["target"])\n  |> aggregateWindow(every: 1h, fn: sum, createEmpty: false)\n  |> filter(fn: (r) => r._value > 0)\n'
+    fails = (base + '  |> filter(fn: (r) => r._field == "ok")\n  |> toFloat()\n'
+             '  |> map(fn: (r) => ({r with _value: 1.0 - r._value}))\n'
+             '  |> group(columns: ["target"])\n  |> aggregateWindow(every: 1h, fn: sum, createEmpty: false)\n  |> filter(fn: (r) => r._value > 0.0)\n'
              '  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.target}))\n  |> group(columns: ["_field"])')
-    recent = (base + '  |> filter(fn: (r) => r._field == "error" or r._field == "status")\n  |> group()\n'
+    recent = (base + '  |> filter(fn: (r) => r._field == "error" or r._field == "status")\n'
+              '  |> map(fn: (r) => ({r with _value: string(v: r._value)}))\n  |> group()\n'
               '  |> pivot(rowKey: ["_time", "target"], columnKey: ["_field"], valueColumn: "_value")\n'
               '  |> filter(fn: (r) => exists r.error)\n  |> keep(columns: ["_time", "target", "status", "error"])\n'
               '  |> sort(columns: ["_time"], desc: true)\n  |> limit(n: 50)')
