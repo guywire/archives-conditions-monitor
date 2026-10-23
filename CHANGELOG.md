@@ -2,6 +2,8 @@
 
 ## 0.8.1 — 2026-10-23
 - README screenshots (docs/screenshots, simulated data in example buildings).
+- README rewritten around the Linux/Docker stack: requirements, step-by-step install (incl. the rollup task,
+  which no script created), updating with `git pull`; Raspberry Pi specifics moved to their own section.
 - Fix: Website dashboard "Failed checks per hour" and "Recent failures" panels failed (Flux type conflicts).
 - Fix: Sensor Health drift check treated same-named rooms in different buildings (e.g. two "Stacks") as one room.
 
