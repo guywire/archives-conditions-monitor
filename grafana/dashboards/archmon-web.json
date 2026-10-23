@@ -1,0 +1,976 @@
+{
+  "uid": "archmon-web",
+  "title": "6 Website",
+  "tags": [
+    "archmon"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "links": [
+    {
+      "type": "link",
+      "title": "Overview",
+      "url": "/d/archmon-overview",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Room Detail",
+      "url": "/d/archmon-room",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Monthly Report",
+      "url": "/d/archmon-report",
+      "keepTime": false,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Leaks & Air Quality",
+      "url": "/d/archmon-air",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Sensor Health",
+      "url": "/d/archmon-health",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Website",
+      "url": "/d/archmon-web",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Settings",
+      "url": "/d/archmon-settings",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    }
+  ],
+  "templating": {
+    "list": [
+      {
+        "name": "target",
+        "label": "Image",
+        "type": "query",
+        "datasource": {
+          "type": "influxdb",
+          "uid": "archmon-influx"
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "current": {},
+        "sort": 1,
+        "query": "import \"influxdata/influxdb/schema\"\nschema.tagValues(bucket: \"environment_raw\", tag: \"target\", start: -30d, predicate: (r) => r._measurement == \"web_probe\")"
+      }
+    ]
+  },
+  "panels": [
+    {
+      "type": "stat",
+      "title": "Median total time",
+      "description": "Half of the successful downloads in the period were faster than this (DNS + connect + TLS + server wait + transfer).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\n  |> filter(fn: (r) => r._field == \"total_ms\")\n  |> toFloat()\n  |> group()\n  |> median()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1F6FB2",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "id": 1
+    },
+    {
+      "type": "stat",
+      "title": "Slowest 5 %",
+      "description": "95th percentile of total download time: what a visitor sees at a bad moment.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 6,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\n  |> filter(fn: (r) => r._field == \"total_ms\")\n  |> toFloat()\n  |> group()\n  |> quantile(q: 0.95)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1F6FB2",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "id": 2
+    },
+    {
+      "type": "stat",
+      "title": "Median download speed",
+      "description": "Transfer speed of the image body. Small images never reach full speed, so compare like with like.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\n  |> filter(fn: (r) => r._field == \"mbps\")\n  |> toFloat()\n  |> group()\n  |> median()"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbits",
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#1F6FB2",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "id": 3
+    },
+    {
+      "type": "stat",
+      "title": "Success rate",
+      "description": "Share of checks that returned the complete image (HTTP 200, full length).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\n  |> filter(fn: (r) => r._field == \"ok\")\n  |> toFloat()\n  |> group()\n  |> mean()\n  |> map(fn: (r) => ({r with _value: r._value * 100.0}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "decimals": 1,
+          "color": {
+            "mode": "thresholds"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "#C81E1E",
+                "value": null
+              },
+              {
+                "color": "#E3A008",
+                "value": 95
+              },
+              {
+                "color": "#2E8540",
+                "value": 99
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "colorMode": "value",
+        "graphMode": "none",
+        "textMode": "value"
+      },
+      "id": 4
+    },
+    {
+      "type": "table",
+      "title": "Website images",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 4
+      },
+      "description": "One row per monitored image for the selected period. Last check turns amber when no check has run for 90 minutes (the webmon container may be stopped).",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "base = from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\nlast_ok = base |> filter(fn: (r) => r._field == \"ok\") |> toFloat() |> group(columns: [\"target\", \"host\"]) |> last()\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"last_ok\", _value: r._value}))\nlast_status = base |> filter(fn: (r) => r._field == \"status\") |> toFloat() |> group(columns: [\"target\", \"host\"]) |> last()\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"last_status\", _value: r._value}))\nsize = base |> filter(fn: (r) => r._field == \"bytes\") |> toFloat() |> group(columns: [\"target\", \"host\"]) |> last()\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"size\", _value: r._value}))\nmed_ms = base |> filter(fn: (r) => r._field == \"total_ms\") |> toFloat() |> group(columns: [\"target\", \"host\"]) |> median()\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"med_ms\", _value: r._value}))\np95_ms = base |> filter(fn: (r) => r._field == \"total_ms\") |> toFloat() |> group(columns: [\"target\", \"host\"]) |> quantile(q: 0.95)\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"p95_ms\", _value: r._value}))\nttfb = base |> filter(fn: (r) => r._field == \"ttfb_ms\") |> toFloat() |> group(columns: [\"target\", \"host\"]) |> median()\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"ttfb\", _value: r._value}))\nspeed = base |> filter(fn: (r) => r._field == \"mbps\") |> toFloat() |> group(columns: [\"target\", \"host\"]) |> median()\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"speed\", _value: r._value}))\npct_ok = base |> filter(fn: (r) => r._field == \"ok\") |> toFloat() |> group(columns: [\"target\", \"host\"]) |> mean() |> map(fn: (r) => ({r with _value: r._value * 100.0}))\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"pct_ok\", _value: r._value}))\nchecks = base |> filter(fn: (r) => r._field == \"ok\") |> toFloat() |> group(columns: [\"target\", \"host\"]) |> count() |> toFloat()\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"checks\", _value: r._value}))\nage = base |> filter(fn: (r) => r._field == \"ok\") |> group(columns: [\"target\", \"host\"]) |> last()\n  |> map(fn: (r) => ({target: r.target, host: r.host, _field: \"age_min\", _value: float(v: int(v: now()) - int(v: r._time)) / 60000000000.0}))\nunion(tables: [last_ok, last_status, size, med_ms, p95_ms, ttfb, speed, pct_ok, checks, age])\n  |> group()\n  |> pivot(rowKey: [\"target\", \"host\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> sort(columns: [\"target\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 0
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "target"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Image"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "host"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Server"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "last_ok"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Last result"
+              },
+              {
+                "id": "mappings",
+                "value": [
+                  {
+                    "type": "value",
+                    "options": {
+                      "1": {
+                        "text": "OK",
+                        "color": "#2E8540"
+                      },
+                      "0": {
+                        "text": "Failed",
+                        "color": "#C81E1E"
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "last_status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "HTTP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "size"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Size"
+              },
+              {
+                "id": "unit",
+                "value": "decbytes"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "med_ms"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Median time"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "p95_ms"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Slowest 5 %"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ttfb"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Server wait"
+              },
+              {
+                "id": "unit",
+                "value": "ms"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "speed"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Speed"
+              },
+              {
+                "id": "unit",
+                "value": "Mbits"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "pct_ok"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Success"
+              },
+              {
+                "id": "unit",
+                "value": "percent"
+              },
+              {
+                "id": "decimals",
+                "value": 1
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#C81E1E",
+                      "value": null
+                    },
+                    {
+                      "color": "#E3A008",
+                      "value": 95
+                    },
+                    {
+                      "color": "#2E8540",
+                      "value": 99
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "checks"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Checks"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "age_min"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Last check"
+              },
+              {
+                "id": "unit",
+                "value": "m"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "#E3A008",
+                      "value": 90
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "id": 5,
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "target": 0,
+              "last_ok": 1,
+              "last_status": 2,
+              "med_ms": 3,
+              "p95_ms": 4,
+              "ttfb": 5,
+              "speed": 6,
+              "size": 7,
+              "pct_ok": 8,
+              "checks": 9,
+              "age_min": 10,
+              "host": 11
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "timeseries",
+      "title": "Total download time",
+      "description": "Start of the check to the last byte, per image. Spikes on every image at once point to our network or the whole site; one image alone points to that file or its server.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 11
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\n  |> filter(fn: (r) => r._field == \"total_ms\")\n  |> group(columns: [\"target\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.target}))\n  |> group(columns: [\"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "auto",
+            "spanNulls": 10800000,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 6
+    },
+    {
+      "type": "timeseries",
+      "title": "Download speed",
+      "description": "Transfer rate of the image body (excludes connection setup).",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 20
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\n  |> filter(fn: (r) => r._field == \"mbps\")\n  |> group(columns: [\"target\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.target}))\n  |> group(columns: [\"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Mbits",
+          "decimals": 1,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 0,
+            "showPoints": "auto",
+            "spanNulls": 10800000,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 7
+    },
+    {
+      "type": "timeseries",
+      "title": "Where the time goes",
+      "description": "Average time per step across the selected images, stacked. Large DNS = name lookup problem; Connect/TLS = network distance or busy server; Server wait = slow website backend; Transfer = bandwidth.",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 29
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\n  |> filter(fn: (r) => contains(value: r._field, set: [\"dns_ms\", \"connect_ms\", \"tls_ms\", \"ttfb_ms\", \"download_ms\"]))\n  |> group(columns: [\"_field\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: if r._field == \"dns_ms\" then \"1 DNS lookup\" else if r._field == \"connect_ms\" then \"2 Connect\"\n      else if r._field == \"tls_ms\" then \"3 TLS handshake\" else if r._field == \"ttfb_ms\" then \"4 Server wait\" else \"5 Transfer\"}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "decimals": 1,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 70,
+            "showPoints": "auto",
+            "spanNulls": 10800000,
+            "drawStyle": "line",
+            "stacking": {
+              "mode": "normal"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "mean",
+            "max"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 8
+    },
+    {
+      "type": "timeseries",
+      "title": "Failed checks per hour",
+      "description": "dns = name lookup failed · connect = server refused/unreachable · tls = certificate/HTTPS problem · timeout = no answer within 60 s · http_NNN = server error code (404 missing, 5xx server fault) · truncated = image cut short",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 38
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\n  |> filter(fn: (r) => r._field == \"ok\")\n  |> map(fn: (r) => ({r with _value: 1 - r._value}))\n  |> group(columns: [\"target\"])\n  |> aggregateWindow(every: 1h, fn: sum, createEmpty: false)\n  |> filter(fn: (r) => r._value > 0)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.target}))\n  |> group(columns: [\"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "decimals": 1,
+          "min": 0,
+          "color": {
+            "mode": "palette-classic-by-name"
+          },
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 70,
+            "showPoints": "auto",
+            "spanNulls": 10800000,
+            "drawStyle": "bars",
+            "stacking": {
+              "mode": "none"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": []
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "id": 9
+    },
+    {
+      "type": "table",
+      "title": "Recent failures",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 47
+      },
+      "description": "dns = name lookup failed · connect = server refused/unreachable · tls = certificate/HTTPS problem · timeout = no answer within 60 s · http_NNN = server error code (404 missing, 5xx server fault) · truncated = image cut short",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"web_probe\" and contains(value: r.target, set: ${target:json}))\n  |> filter(fn: (r) => r._field == \"error\" or r._field == \"status\")\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"target\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> filter(fn: (r) => exists r.error)\n  |> keep(columns: [\"_time\", \"target\", \"status\", \"error\"])\n  |> sort(columns: [\"_time\"], desc: true)\n  |> limit(n: 50)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "_time"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Time"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "target"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Image"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "status"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "HTTP"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "error"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Problem"
+              }
+            ]
+          }
+        ]
+      },
+      "id": 10,
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "_time": 0,
+              "target": 1,
+              "status": 2,
+              "error": 3
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

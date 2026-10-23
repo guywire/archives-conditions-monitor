@@ -1,0 +1,8 @@
+# ntfy template for Grafana webhook alerts (used as ?template=archmon).
+# Priority comes from the alert: alarm = high, watch/sensor = default, resolved = low.
+title: |
+  {{- if eq .status "resolved" }}Resolved: {{ .title }}{{ else if eq .commonLabels.severity "alarm" }}ALARM: {{ .title }}{{ else }}{{ .title }}{{ end }}
+message: |
+  {{ .message | trunc 2000 }}
+priority: |
+  {{- if eq .status "resolved" }}low{{ else if eq .commonLabels.severity "alarm" }}high{{ else }}default{{ end }}

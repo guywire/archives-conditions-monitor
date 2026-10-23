@@ -1,0 +1,11 @@
+# Website monitor targets (webmon/webmon.py). Edits apply within 30 s, no restart needed.
+# name         short label shown in Grafana (letters, digits, dashes)
+# url          full image URL on our website (http or https)
+# interval_min average minutes between checks of this image (min 1; please keep >= 5 for a public site)
+# jitter_pct   each gap is interval +/- this percentage, chosen at random (0-90)
+# cache_bust   yes = add a random ?archmon=... so CDN/browser caches are skipped and the origin server is measured
+#              no  = measure what a visitor normally gets (cached copy if the site uses a CDN)
+# Example (remove the leading # and use real image addresses):
+# home-hero,https://www.example.org/images/hero.jpg,15,30,no
+# collection-large,https://www.example.org/media/large-scan.jpg,30,40,yes
+name,url,interval_min,jitter_pct,cache_bust

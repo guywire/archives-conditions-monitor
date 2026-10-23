@@ -1,0 +1,14 @@
+# ntfy push notification server (self-hosted). Docs: https://docs.ntfy.sh/config/
+# base-url comes from NTFY_BASE_URL in .env (docker-compose.yml)
+listen-http: ":80"
+cache-file: "/var/cache/ntfy/cache.db"
+cache-duration: "72h"
+auth-file: "/var/lib/ntfy/user.db"
+auth-default-access: "deny-all"     # every user/topic must be granted explicitly
+enable-signup: false
+enable-login: true
+# iOS needs Apple push relayed through ntfy.sh to wake the app. Only a hash of the
+# message ID goes to ntfy.sh; the phone then fetches the content from this server.
+upstream-base-url: "https://ntfy.sh"
+template-dir: "/etc/ntfy/templates"
+log-level: info

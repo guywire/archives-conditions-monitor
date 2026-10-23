@@ -1,0 +1,523 @@
+{
+  "uid": "archmon-health",
+  "title": "5 Sensor Health",
+  "tags": [
+    "archmon"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "editable": false,
+  "graphTooltip": 1,
+  "refresh": "1m",
+  "time": {
+    "from": "now-7d",
+    "to": "now"
+  },
+  "links": [
+    {
+      "type": "link",
+      "title": "Overview",
+      "url": "/d/archmon-overview",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Room Detail",
+      "url": "/d/archmon-room",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Monthly Report",
+      "url": "/d/archmon-report",
+      "keepTime": false,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Leaks & Air Quality",
+      "url": "/d/archmon-air",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Sensor Health",
+      "url": "/d/archmon-health",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Website",
+      "url": "/d/archmon-web",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    },
+    {
+      "type": "link",
+      "title": "Settings",
+      "url": "/d/archmon-settings",
+      "keepTime": true,
+      "icon": "dashboard",
+      "tooltip": "",
+      "targetBlank": false
+    }
+  ],
+  "templating": {
+    "list": []
+  },
+  "panels": [
+    {
+      "type": "table",
+      "title": "Sensors",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 10,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "description": "Weak Wi-Fi (below -75 dBm), frequent restarts (short uptime) or a stale last report point to a sensor that needs attention. Drift checks come in a later phase.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: -30d)\n  |> filter(fn: (r) => r._measurement == \"device_state\" and (r._field == \"Wifi_Signal\" or r._field == \"UptimeSec\"))\n  |> last()\n  |> toFloat()\n  |> map(fn: (r) => ({r with room: if exists r.room then r.room else \"Unregistered\", device_id: if exists r.device_id then r.device_id else \"\"}))\n  |> group()\n  |> pivot(rowKey: [\"_time\", \"sensor_id\", \"room\", \"device_id\"], columnKey: [\"_field\"], valueColumn: \"_value\")\n  |> map(fn: (r) => ({sensor_id: r.sensor_id, device_id: r.device_id, room: r.room,\n      signal: r.Wifi_Signal, uptime_s: r.UptimeSec, age_min: float(v: int(v: now()) - int(v: r._time)) / 60000000000.0}))\n  |> sort(columns: [\"age_min\"], desc: true)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sensor_id"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sensor"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "device_id"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Device (MAC)"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "room"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Room"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "signal"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Wi-Fi signal"
+              },
+              {
+                "id": "unit",
+                "value": "dBm"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#C81E1E",
+                      "value": null
+                    },
+                    {
+                      "color": "#E3A008",
+                      "value": -80
+                    },
+                    {
+                      "color": "#2E8540",
+                      "value": -70
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "uptime_s"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Uptime"
+              },
+              {
+                "id": "unit",
+                "value": "s"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "age_min"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Last report"
+              },
+              {
+                "id": "unit",
+                "value": "m"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "text",
+                      "value": null
+                    },
+                    {
+                      "color": "#C81E1E",
+                      "value": 15
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "id": 1,
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "room": 0,
+              "sensor_id": 1,
+              "device_id": 2,
+              "age_min": 3,
+              "signal": 4,
+              "uptime_s": 5
+            }
+          }
+        }
+      ]
+    },
+    {
+      "type": "table",
+      "title": "Drift and plausibility (last 6 h)",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 24,
+        "x": 0,
+        "y": 10
+      },
+      "description": "Deviation compares each sensor with the average of the OTHER sensors in the same room (needs 2+ sensors per room). Flag for checking at > 1 °C (1.8 °F) or > 4 % RH. 'Stuck' or 'saturated' suggests a failing sensor element.",
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "base = from(bucket: \"environment_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"environment\" and (r._field == \"temperature_c\" or r._field == \"humidity_rh\") and r.room_type != \"test\" and r.room_type != \"unregistered\")\nstats = base\n  |> group(columns: [\"room\", \"sensor_id\", \"_field\"])\n  |> reduce(identity: {s: 0.0, s2: 0.0, n: 0.0, mx: -1000.0}, fn: (r, accumulator) => ({s: accumulator.s + r._value,\n      s2: accumulator.s2 + r._value * r._value, n: accumulator.n + 1.0, mx: if r._value > accumulator.mx then r._value else accumulator.mx}))\n  |> map(fn: (r) => ({r with mean: r.s / r.n, sd: if r.n > 1.0 then (r.s2 - r.s * r.s / r.n) / (r.n - 1.0) else 0.0}))\nrooms = stats\n  |> group(columns: [\"room\", \"_field\"])\n  |> reduce(identity: {rs: 0.0, rn: 0.0}, fn: (r, accumulator) => ({rs: accumulator.rs + r.mean, rn: accumulator.rn + 1.0}))\njoin(tables: {s: stats, r: rooms}, on: [\"room\", \"_field\"])\n  |> map(fn: (r) => ({room: r.room, sensor_id: r.sensor_id, _field: r._field, n: r.n, max: r.mx, var: r.sd,\n      dev: if r.rn > 1.0 then r.mean - (r.rs - r.mean) / (r.rn - 1.0) else 0.0, peers: r.rn - 1.0}))\n  |> group()\n  |> pivot(rowKey: [\"room\", \"sensor_id\", \"peers\"], columnKey: [\"_field\"], valueColumn: \"dev\")\n  |> rename(columns: {temperature_c: \"dev_t\", humidity_rh: \"dev_h\"})\n"
+        },
+        {
+          "refId": "B",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: -6h)\n  |> filter(fn: (r) => r._measurement == \"environment\" and (r._field == \"temperature_c\" or r._field == \"humidity_rh\") and r.room_type != \"test\" and r.room_type != \"unregistered\")\n  |> group(columns: [\"sensor_id\", \"_field\"])\n  |> reduce(identity: {lo: 1000.0, hi: -1000.0}, fn: (r, accumulator) => ({lo: if r._value < accumulator.lo then r._value else accumulator.lo,\n      hi: if r._value > accumulator.hi then r._value else accumulator.hi}))\n  |> map(fn: (r) => ({sensor_id: r.sensor_id, _field: r._field, flag: if r.hi - r.lo == 0.0 then \"stuck (no change in 6 h)\"\n      else if r._field == \"humidity_rh\" and r.hi >= 99.0 then \"saturated (RH ≥ 99 %)\" else \"\"}))\n  |> group(columns: [\"sensor_id\"])\n  |> reduce(identity: {check: \"\"}, fn: (r, accumulator) => ({check: if r.flag == \"\" then accumulator.check else if accumulator.check == \"\" then r.flag else accumulator.check + \"; \" + r.flag}))\n  |> map(fn: (r) => ({sensor_id: r.sensor_id, check: if r.check == \"\" then \"OK\" else r.check}))\n  |> group()"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "joinByField",
+          "options": {
+            "byField": "sensor_id",
+            "mode": "outer"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "indexByName": {
+              "room": 0,
+              "sensor_id": 1,
+              "peers": 2,
+              "dev_t": 3,
+              "dev_h": 4,
+              "check": 5
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "decimals": 2
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "room"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Room"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "sensor_id"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Sensor"
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "peers"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Peers in room"
+              },
+              {
+                "id": "decimals",
+                "value": 0
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dev_t"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Temp deviation (°C)"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#C81E1E",
+                      "value": null
+                    },
+                    {
+                      "color": "#E3A008",
+                      "value": -1.0
+                    },
+                    {
+                      "color": "text",
+                      "value": -0.7
+                    },
+                    {
+                      "color": "#E3A008",
+                      "value": 0.7
+                    },
+                    {
+                      "color": "#C81E1E",
+                      "value": 1.0
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "dev_h"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "RH deviation (%)"
+              },
+              {
+                "id": "thresholds",
+                "value": {
+                  "mode": "absolute",
+                  "steps": [
+                    {
+                      "color": "#C81E1E",
+                      "value": null
+                    },
+                    {
+                      "color": "#E3A008",
+                      "value": -4
+                    },
+                    {
+                      "color": "text",
+                      "value": -3
+                    },
+                    {
+                      "color": "#E3A008",
+                      "value": 3
+                    },
+                    {
+                      "color": "#C81E1E",
+                      "value": 4
+                    }
+                  ]
+                }
+              },
+              {
+                "id": "custom.cellOptions",
+                "value": {
+                  "type": "color-text"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "check"
+            },
+            "properties": [
+              {
+                "id": "displayName",
+                "value": "Plausibility"
+              }
+            ]
+          }
+        ]
+      },
+      "id": 2
+    },
+    {
+      "type": "timeseries",
+      "title": "Wi-Fi signal (dBm)",
+      "datasource": {
+        "type": "influxdb",
+        "uid": "archmon-influx"
+      },
+      "gridPos": {
+        "h": 9,
+        "w": 24,
+        "x": 0,
+        "y": 18
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "influxdb",
+            "uid": "archmon-influx"
+          },
+          "query": "from(bucket: \"environment_raw\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"device_state\" and r._field == \"Wifi_Signal\")\n  |> group(columns: [\"sensor_id\"])\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({_time: r._time, _value: r._value, _field: r.sensor_id}))\n  |> group(columns: [\"_field\"])"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dBm",
+          "custom": {
+            "lineWidth": 1,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "calcs": [
+            "lastNotNull",
+            "min"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      },
+      "id": 3
+    }
+  ]
+}

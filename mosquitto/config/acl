@@ -1,0 +1,15 @@
+# Telegraf: read-only on sensor telemetry
+user telegraf
+topic read tele/#
+topic read stat/#
+
+# Sensors (shared device account for phase 1; move to per-device users later).
+# Tasmota needs tele/ and stat/ for publishing and cmnd/ for receiving commands.
+user sensor
+topic write tele/#
+topic write stat/#
+topic read cmnd/#
+
+# Admin: full access for maintenance and Tasmota configuration
+user admin
+topic readwrite #

@@ -1,0 +1,7 @@
+room_type,t_min_c,t_max_c,rh_min,rh_max,rh_swing_24h,notes
+general_storage,13,20,35,50,5,Stacks and map room (ISO 11799 / BS 4971 style)
+vault,13,18,35,45,5,Secure vault; tighten if it holds photo/film
+chilled,2,8,30,40,5,Cold room; watch condensation when items leave
+humidification,15,25,60,95,100,Intentional high RH for flattening; alert only on mould hours and out-of-hours use
+cold_vault,-20,-15,30,40,5,Freezer storage (none yet)
+test,-40,85,0,100,100,Bench testing; no alerts

@@ -1,0 +1,13 @@
+.env
+mosquitto/config/passwd
+*.key
+*.pem
+backups/
+__pycache__/
+# Site data: real room names, sensors, addresses. Templates: registry/*.example.csv
+STATUS.md
+registry/sensors.csv
+registry/room_overrides.csv
+registry/targets-changes.log
+registry/web_targets.csv
+grafana/dashboards/archmon-settings.json
