@@ -2,7 +2,7 @@
 # Installs the Grafana-driven updater (requirement F16): trusted signing key, systemd units, daily check. Idempotent.
 # Run as root from the install folder (must be a Git checkout; see scripts/convert-to-git.sh for older copies):
 #   sudo scripts/setup-updater.sh <admin-user> <signer-email> <signer-public-key-file>
-#   e.g. sudo scripts/setup-updater.sh pi5 me@example.org /home/pi5/archmon_signing.pub
+#   e.g. sudo scripts/setup-updater.sh archadmin me@example.org /home/archadmin/archmon_signing.pub
 # The key is the public half of the SSH key you sign release tags with (git tag -s, gpg.format=ssh).
 set -euo pipefail
 cd "$(dirname "$0")/.."
