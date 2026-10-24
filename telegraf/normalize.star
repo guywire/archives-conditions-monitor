@@ -2,7 +2,8 @@
 #   temperature_c, humidity_rh (calibrated), dew_point_c (Magnus, a=17.62 b=243.12)
 #   t_min_c/t_max_c/rh_min/rh_max (room profile band) and status: 0 OK, 1 watch, 2 alarm
 # Tasmota must report Celsius (SetOption8 0).
-# Also: water-leak probes (Switch1 ON = water) -> "leak" metric, and air-quality sensors (SEN5X, SCD40, PMS5003,
+# Also: water-leak probes (Switch1 ON = water) -> "leak" metric; motion/presence sensors (Switch1 ON = motion, registry
+# kind=motion) -> "occupancy" metric; and air-quality sensors (SEN5X, SCD40, PMS5003,
 # SGP30...) -> "air_quality" metric. One payload can yield several metrics.
 load("math.star", "math")
 
@@ -11,7 +12,7 @@ RH_MARGIN = 5.0  # %RH outside band = watch; beyond = alarm
 # Air-quality limits: field -> (Tasmota key suffix, watch above, alarm above). Archive guidance (ISO 11799,
 # PAS 198, Sensirion index scales); scripts/build_dashboards.py reads this line, keep it a one-line dict.
 AQ_LIMITS = {"pm25": ("_PM2.5", 10.0, 25.0), "pm10": ("_PM10", 20.0, 50.0), "co2_ppm": ("_CarbonDioxide", 1000.0, 2000.0), "voc_index": ("_VOC_Index", 200.0, 300.0), "nox_index": ("_NOx_Index", 20.0, 100.0)}
-DROP_TAGS = ["cal_t", "cal_rh", "installed", "t_min_c", "t_max_c", "rh_min", "rh_max", "rh_swing_24h", "notes",
+DROP_TAGS = ["cal_t", "cal_rh", "installed", "kind", "t_min_c", "t_max_c", "rh_min", "rh_max", "rh_swing_24h", "notes",
              "o_t_min_c", "o_t_max_c", "o_rh_min", "o_rh_max"]
 
 def level(v, lo, hi, margin):
@@ -43,10 +44,14 @@ def extras(metric):
     res = []
     sw = metric.fields.get("Switch1")
     if sw != None:
-        m = copy_tags(metric, "leak")
-        wet = 1 if str(sw).upper() in ("ON", "1") else 0
-        m.fields["water"] = wet
-        m.fields["status"] = 2 * wet
+        on = 1 if str(sw).upper() in ("ON", "1") else 0
+        if metric.tags.get("kind", "") == "motion":   # PIR or mmWave presence output on a switch input
+            m = copy_tags(metric, "occupancy")
+            m.fields["motion"] = on
+        else:
+            m = copy_tags(metric, "leak")
+            m.fields["water"] = on
+            m.fields["status"] = 2 * on
         res.append(m)
     aq = copy_tags(metric, "air_quality")
     status = None

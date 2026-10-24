@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.9.0 — 2026-10-23
+- Software updates from Grafana (Settings → Software update, Admins only): `scripts/update.sh` on the host installs
+  only release tags signed with the maintainer's SSH key, backs up first, health-checks (services, Grafana, InfluxDB,
+  fresh data) and rolls back automatically; daily check with ntfy note. The config API only relays requests through
+  `state/`; no container gets Docker or Git. Setup: `scripts/setup-updater.sh`; copied installs: `scripts/convert-to-git.sh`.
+- Motion / presence sensors: Tasmota ESP32/ESP8266 with PIR or mmWave OUT pin on Switch1, registry `kind=motion` ->
+  `occupancy` measurement; presence timeline on Room Detail and Leaks & Air Quality; `scripts/setup-motion.sh`
+  (untested on hardware); offline alert covers them; 2 simulated motion sensors.
+- New alert: "Website check failing" (under 50 % of an image's checks OK in 45 min).
+- Generated dashboards/alert rules and `registry/room_profiles.csv` are no longer in Git (they change on the server);
+  `registry/room_profiles.example.csv` template. Run `scripts/build_dashboards.py` after install.
+- Fix: shell scripts are executable in the repository (fresh clones could not run them).
+- `bootstrap.sh` also installs git, python3 and curl.
+
 ## 0.8.1 — 2026-10-23
 - README screenshots (docs/screenshots, simulated data in example buildings).
 - README rewritten around the Linux/Docker stack: requirements, step-by-step install (incl. the rollup task,

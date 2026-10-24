@@ -39,6 +39,12 @@ LEAK = {
     "sim-cb-f1-vault-leak-01": lambda: False,
     "sim-rc-f1-stacks-leak-01": lambda: False,
 }
+# Motion / presence sensors (PIR or mmWave on a switch input, registry kind=motion): researchers in the map room
+# during opening hours, a short daily check in the vault.
+MOTION = {
+    "sim-cb-f1-map-pir-01": lambda: 9 <= hour() < 17 and window(1.5, 25, 0.2),
+    "sim-cb-f1-vault-pir-01": lambda: window(24, 15, 19.5),
+}
 # Air quality, in Tasmota's payload shapes for the Sensirion SEN55 (particles, VOC, NOx) and SCD40 (CO2).
 AIR = {
     "sim-cb-f1-vault-aq-01": lambda: {"SEN5X": {"PM1": 2 + n(0.5), "PM2.5": 4 + abs(n(1)), "PM4": 5 + abs(n(1)), "PM10": 6 + abs(n(1.5)),
@@ -78,13 +84,15 @@ def rnd(d): return {k: rnd(v) if isinstance(v, dict) else (round(v, 1) if isinst
 
 def tick(m, start):
     ts = time.strftime("%Y-%m-%dT%H:%M:%S")
-    for i, sid in enumerate([*CLIMATE, *LEAK, *AIR]):
+    for i, sid in enumerate([*CLIMATE, *LEAK, *AIR, *MOTION]):
         t = topic(i, sid)
         if sid in CLIMATE:
             tc, rh = CLIMATE[sid]()
             body = {"SHT4X": {"Temperature": tc, "Humidity": max(1.0, min(100.0, rh))}, "TempUnit": "C"}
         elif sid in LEAK:
             body = {"Switch1": "ON" if LEAK[sid]() else "OFF"}
+        elif sid in MOTION:
+            body = {"Switch1": "ON" if MOTION[sid]() else "OFF"}
         else:
             body = AIR[sid]()
         m.pub(f"tele/{t}/SENSOR", rnd({"Time": ts, **body}))
@@ -95,7 +103,7 @@ def tick(m, start):
 def main():
     random.seed()
     start = time.time()
-    print(f"simulating {len(CLIMATE) + len(LEAK) + len(AIR)} sensors every {PERIOD}s", flush=True)
+    print(f"simulating {len(CLIMATE) + len(LEAK) + len(AIR) + len(MOTION)} sensors every {PERIOD}s", flush=True)
     while True:
         try:
             m = Mqtt()

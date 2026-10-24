@@ -52,7 +52,7 @@ All services run as containers from `docker-compose.yml`. Image versions are pin
 | influxdb | `influxdb:2.7.12` | Time-series storage: raw data 2 years, 15-minute rollup kept forever | 8086, host only |
 | grafana | `grafana/grafana:13.2.4` + Business Forms 6.3.5 plugin | Dashboards and alert rules | via proxy |
 | proxy | `nginx:1.30.6-alpine` | Front door for Grafana and the target editor (place for TLS) | 3000, LAN |
-| config | `python:3.12.7-slim-bookworm` | Target-range editor API used by the Settings dashboard | internal |
+| config | `python:3.12.7-slim-bookworm` | API for the Settings dashboard: target ranges, software-update requests | internal |
 | ntfy | `binwiederhier/ntfy:v2.31.1` | Self-hosted push notifications to staff phones | 8090, LAN |
 | webmon | `python:3.12.7-slim-bookworm` | Website image download checks | internal |
 | simulator | `python:3.12.7-slim-bookworm` | Fake sensors for demos (only with `--profile sim`) | internal |
@@ -116,12 +116,12 @@ git-ignored. Back it up together with the data (see Backups).
 ### 4. Describe your site
 The registry files hold your real rooms, so they are git-ignored. Start from the templates:
 ```
-for f in sensors room_overrides web_targets; do cp registry/$f.example.csv registry/$f.csv; done
+for f in sensors room_profiles room_overrides web_targets; do cp registry/$f.example.csv registry/$f.csv; done
 ```
 - `registry/sensors.csv`: one row per sensor: `sensor_id`, site, building, floor, room, `room_type`, calibration
-  offsets `cal_t` (°C) and `cal_rh` (%RH).
-- `registry/room_profiles.csv`: target band per room type, in °C and %RH. Already filled with archival defaults
-  (general storage, vault, cold room, humidification room, freezer).
+  offsets `cal_t` (°C) and `cal_rh` (%RH), install date, and `kind` (blank, or `motion` for a motion sensor).
+- `registry/room_profiles.csv`: target band per room type, in °C and %RH. The template holds archival defaults
+  (general storage, vault, cold room, humidification room, freezer); the Settings dashboard edits it later.
 - `registry/web_targets.csv`: website images to time. Leave it empty to turn the website monitor off.
 
 ### 5. Generate the dashboards
@@ -130,8 +130,8 @@ python3 scripts/build_dashboards.py
 # without Python on the host:
 docker run --rm -u "$(id -u)" -v "$PWD:/w" -w /w python:3.12.7-slim-bookworm python scripts/build_dashboards.py
 ```
-Needed once at install: the Settings dashboard is built from your room list. Re-run it after editing rooms or
-dashboard code.
+The dashboards and alert rules are generated from your room list and are not stored in Git, so this step is
+required. Re-run it after editing rooms (the updater and the Settings dashboard do it automatically).
 
 ### 6. Start the stack
 ```
@@ -153,14 +153,18 @@ scripts/setup-grafana-users.sh    # read-only Grafana login "staff"
 scripts/setup-ntfy.sh             # ntfy users: admin, grafana (publishes alerts), staff (receives alerts)
 ```
 
-### 9. Schedule backups
+### 9. Turn on updates from Grafana (optional)
+See [Software updates](#software-updates). It needs your release-signing public key:
+`sudo scripts/setup-updater.sh "$USER" <your-email> <signing-key.pub>`
+
+### 10. Schedule backups
 `crontab -e`, then add: `20 2 * * * /opt/archmon/scripts/backup.sh >> /opt/archmon/backups/backup.log 2>&1`
 
-### 10. Check
+### 11. Check
 `docker compose ps` should list every service as running. Open `http://<server-address>:3000` and log in as `admin`
 (`grep GRAFANA_ADMIN_PASSWORD .env`). To see data before real sensors arrive, start the simulator (see Common tasks).
 
-### 11. Connect sensors
+### 12. Connect sensors
 1. Join the Tasmota sensor to Wi-Fi (its setup hotspot) and set MQTT: host `<server-address>`, port 1883, user
    `sensor` (`grep MQTT_SENSOR .env`), topic `<sensor_id>_%06X`, e.g. `bldga-f1-vault-01_%06X`.
    Telegraf splits the MAC suffix off into `device_id`.
@@ -217,8 +221,8 @@ port 3000. The API checks the user's Grafana session and writes `registry/room_p
 delays are in `scripts/build_dashboards.py` → `alerting()`.
 
 ### Simulated sensors (demo / testing)
-`docker compose --profile sim up -d simulator` starts 12 fake sensors (`sim/simulator.py`): temperature/RH for 6
-rooms, 3 water-leak probes and 3 air-quality sensors (SEN55 particles/VOC/NOx, SCD40 CO2). They appear in rooms
+`docker compose --profile sim up -d simulator` starts 14 fake sensors (`sim/simulator.py`): temperature/RH for 6
+rooms, 3 water-leak probes, 3 air-quality sensors (SEN55 particles/VOC/NOx, SCD40 CO2) and 2 motion sensors. They appear in rooms
 named "… (sim)", and their alerts go to the ntfy topic `archmon-sim` (subscribe with the ntfy admin login), never
 to staff. Built-in scenarios:
 - map room humid (Watch)
@@ -234,6 +238,19 @@ Tasmota payloads are recognised automatically: `Switch1` ON = water (leak probe 
 PMS5003 or SGP30 readings become an `air_quality` record. Limits are `AQ_LIMITS` in `telegraf/normalize.star`
 (the dashboards read them from there). See the "Leaks & Air Quality" dashboard.
 
+### Motion / presence sensors
+Shows when someone is in a room, which explains short temperature/RH bumps (a person adds about 100 W and 40–70 g of
+water vapour an hour). Hardware: any ESP32 or ESP8266 running Tasmota with a PIR sensor (AM312, HC-SR501) or the OUT
+pin of an mmWave radar (HLK-LD2410, which also sees people sitting still) on one GPIO. Set the PIR's hold time to
+about a minute.
+1. Flash Tasmota, join Wi-Fi and set MQTT as for any sensor (Install, step 12), topic e.g. `bldga-f1-map-pir-01_%06X`.
+2. `scripts/setup-motion.sh <full topic> <gpio>` sets the GPIO as Switch1 and adds a rule that reports every change at
+   once plus the state every minute (heartbeat for the offline alert). Not yet tested on real hardware: watch
+   `tele/<topic>/SENSOR` with `mosquitto_sub` afterwards.
+3. Add the sensor to `registry/sensors.csv` with `kind` = `motion`. Without it, Switch1 is read as a leak probe.
+
+Presence shows as a timeline on Room Detail and on Leaks & Air Quality. The simulator includes two motion sensors.
+
 ### Change sensor Wi-Fi
 Add `WIFI_SSID=` and `WIFI_PASSWORD=` to `.env`, then run `scripts/sensor-wifi.sh switch all`. The new network goes
 in slot 2 and the old one stays as fallback. To point sensors at a new server address as well:
@@ -247,16 +264,51 @@ it records DNS, connect, TLS, server-wait and transfer times, plus size, speed a
 
 Include at least one large image (1 MB+): small files finish before a connection reaches full speed, so their
 Mbit/s is not meaningful. Results describe your own internet link as much as the website, so compare with a check
-from elsewhere before blaming the web host.
+from elsewhere before blaming the web host. The "Website check failing" alert (ntfy, normal priority) fires when
+fewer than half of an image's checks succeeded in the last 45 minutes.
 
-### Updating
+## Software updates
+
+New versions are installed from **signed** Git release tags, from Grafana → **7 Settings → Software update**
+(Grafana Admins only), or from the command line. The server checks for a new release every night and sends an ntfy
+note when one is available.
+
+How it works: the Settings panel only asks; the config API writes `state/update-request.json`. A systemd unit on the
+host sees it and runs `scripts/update.sh` as the admin user. No container has Docker or Git access. The updater:
+1. verifies the tag is signed by a key in `state/allowed_signers` (unsigned or wrongly signed releases are refused)
+2. refuses if tracked files were edited locally
+3. runs `scripts/backup.sh`, checks out the tag, regenerates dashboards, pulls images and restarts the stack
+4. waits up to 5 minutes for every service, Grafana, InfluxDB and fresh sensor data
+5. if that fails, goes back to the previous version the same way and reports "rolled back"
+
+Progress, history and the log show on the Settings panel; results also go to ntfy. Site files (`.env`, registry,
+`state/`, backups) are git-ignored, so an update never changes them.
+
+**One-time setup, maintainer's PC** (Git 2.34 or newer): a key used only for signing releases.
 ```
-cd /opt/archmon && git pull
-python3 scripts/build_dashboards.py
-docker compose up -d && docker restart archmon-grafana   # Telegraf reloads by itself when telegraf.conf changes
+ssh-keygen -t ed25519 -f ~/.ssh/archmon_signing -C "archmon release signing"
+git config gpg.format ssh
+git config user.signingkey ~/.ssh/archmon_signing.pub
 ```
-Site files (`registry/sensors.csv`, overrides, change log, web targets, `.env`) are git-ignored, so `git pull`
-never touches them. Dashboards and alert rules are generated: edit `scripts/build_dashboards.py`, not the JSON/YAML.
+Optionally add the public key to GitHub as a *signing* key so releases show "Verified".
+
+**One-time setup, server** (copy `archmon_signing.pub` there first; the email must match your Git `user.email`):
+```
+sudo scripts/setup-updater.sh "$USER" you@example.org ~/archmon_signing.pub
+```
+An install that was copied over instead of cloned is converted first, keeping all site files:
+`scripts/convert-to-git.sh https://github.com/guywire/archives-conditions-monitor.git v0.9.0` (dry run, lists what
+changes), then the same with `--apply`.
+
+**Publishing a release:** add a `## X.Y.Z — date` section to CHANGELOG.md (it is shown in Grafana), commit, then
+```
+git tag -s vX.Y.Z -m "vX.Y.Z" && git push origin main vX.Y.Z
+gh release create vX.Y.Z --verify-tag --title "vX.Y.Z" --notes "..."
+```
+
+**Command line:** `scripts/update.sh check`, `scripts/update.sh apply vX.Y.Z`. Without the updater:
+`git pull && python3 scripts/build_dashboards.py && docker compose up -d && docker compose restart`.
+Dashboards and alert rules are generated: edit `scripts/build_dashboards.py`, not the JSON/YAML.
 
 ### Backups and restore
 `scripts/backup.sh` writes `backups/archmon-<date>.tar.gz` (14 kept). It contains InfluxDB, the Grafana and ntfy

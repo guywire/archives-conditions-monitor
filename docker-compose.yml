@@ -100,7 +100,8 @@ services:
     mem_limit: 64m
 
   # Target-range editor API (config/targets_api.py), used by the Grafana "Settings" dashboard. Not published;
-  # checks the caller's Grafana session. Only the files it edits are writable; .env is not mounted.
+  # checks the caller's Grafana session. Only the files it edits are writable; .env is not mounted. It also relays
+  # "check/install update" requests from Admins to the host updater (scripts/update.sh) through ./state; no Docker access.
   config:
     image: python:3.12.7-slim-bookworm
     container_name: archmon-config
@@ -115,6 +116,7 @@ services:
       - ./telegraf:/app/telegraf
       - ./grafana/dashboards:/app/grafana/dashboards
       - ./grafana/provisioning/alerting:/app/grafana/provisioning/alerting
+      - ./state:/app/state                 # update status/requests shared with scripts/update.sh on the host
     mem_limit: 96m
 
   ntfy:

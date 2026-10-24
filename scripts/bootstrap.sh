@@ -8,7 +8,7 @@ export DEBIAN_FRONTEND=noninteractive
 
 apt-get update -q
 apt-get -y -q full-upgrade
-apt-get -y -q install docker.io docker-compose ufw unattended-upgrades fail2ban apparmor openssl
+apt-get -y -q install docker.io docker-compose ufw unattended-upgrades fail2ban apparmor openssl git python3 curl
 
 # Automatic security updates
 cat >/etc/apt/apt.conf.d/20auto-upgrades <<'EOF'

@@ -42,6 +42,7 @@ if [ -z "${INFLUX_GRAFANA_TOKEN}" ]; then
 fi
 unset T
 
+mkdir -p state   # shared with the config container (uid 1000) and scripts/update.sh
 $DC up -d
 $DC ps
 echo "SETUP_OK"

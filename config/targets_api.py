@@ -5,6 +5,9 @@ Authentication: the caller's own Grafana session cookie is checked against Grafa
   GET  /targets   any logged-in Grafana user: current values, °F / %RH
   POST /targets   Grafana Admin or Editor: validate, write registry CSVs, append to the audit log,
                   make Telegraf reload (touch telegraf.conf; it runs with --watch-config poll) and rebuild dashboards.
+  GET  /update    any logged-in user: software version and update status (written by scripts/update.sh on the host)
+  POST /update    Grafana Admin only: {"action": "check"|"install"} -> state/update-request.json for the host updater.
+                  This container never runs Git or Docker; it can only ask for the newest signed release.
 Standard library only."""
 import csv, datetime, io, json, os, re, subprocess, sys, threading, urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -14,6 +17,8 @@ PROFILES = f"{ROOT}/registry/room_profiles.csv"
 OVERRIDES = f"{ROOT}/registry/room_overrides.csv"
 SENSORS = f"{ROOT}/registry/sensors.csv"
 AUDIT = f"{ROOT}/registry/targets-changes.log"
+UPDATE_STATUS = f"{ROOT}/state/update-status.json"
+UPDATE_REQUEST = f"{ROOT}/state/update-request.json"
 TELEGRAF_CONF = f"{ROOT}/telegraf/telegraf.conf"
 GRAFANA = os.environ.get("GRAFANA_URL", "http://grafana:3000")
 EDIT_ROLES = {"Admin", "Editor"}
@@ -141,6 +146,39 @@ def apply(body, user):
         print("dashboard rebuild failed:", r.stderr[-500:], flush=True)
     return f"Saved {len(changes)} change(s). Status uses the new targets within about a minute."
 
+def update_status():
+    try:
+        with open(UPDATE_STATUS, encoding="utf-8") as fh:
+            d = json.load(fh)
+    except (OSError, ValueError):
+        d = {"state": "unknown", "message": "The updater is not set up on this server (scripts/setup-updater.sh).",
+             "installed": "", "latest": "", "latest_signed": False, "notes": "", "history": "", "log": ""}
+    if os.path.exists(UPDATE_REQUEST):
+        d["state"], d["message"] = "queued", "A request is waiting for the host updater."
+    d["action"] = "check"
+    return d
+
+def request_update(body, user):
+    action = body.get("action")
+    if action not in ("check", "install"):
+        raise ValueError("Choose 'Check for updates' or 'Install'.")
+    st = update_status()
+    if st["state"] in ("unknown", "queued", "updating") or (action == "install" and st["state"] == "checking"):
+        raise ValueError(st["message"] if st["state"] != "updating" else "An update is already running.")
+    req = {"action": action, "user": user}
+    if action == "install":
+        if not st.get("latest") or st["latest"] == st.get("installed"):
+            raise ValueError("No newer release to install. Check for updates first.")
+        if not st.get("latest_signed"):
+            raise ValueError(f"{st['latest']} is not signed by the trusted key, so it cannot be installed.")
+        req["tag"] = st["latest"]
+    with open(UPDATE_REQUEST + ".tmp", "w", encoding="utf-8") as fh:
+        json.dump(req, fh)
+    os.replace(UPDATE_REQUEST + ".tmp", UPDATE_REQUEST)
+    if action == "install":
+        return f"Installing {req['tag']}: backup, restart and health check take a few minutes. Reload this page to follow progress."
+    return "Checking for updates; reload this page in a few seconds."
+
 def grafana_user(cookie):
     """Returns (login, org-1 role) for the caller's Grafana session, or (None, None)."""
     if not cookie:
@@ -169,29 +207,34 @@ class Handler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(data)
 
-    def auth(self, need_edit):
+    def auth(self, need=None):  # need: None (any login), "edit" (Editor/Admin), "admin"
         login, role = grafana_user(self.headers.get("Cookie", ""))
         if not login:
             self.send(401, {"error": "Please log in to Grafana."})
             return None
-        if need_edit and role not in EDIT_ROLES:
+        if need == "edit" and role not in EDIT_ROLES:
             self.send(403, {"error": f"{login} is a {role or 'non-member'}; only Grafana Editors and Admins can change targets."})
+            return None
+        if need == "admin" and role != "Admin":
+            self.send(403, {"error": f"{login} is a {role or 'non-member'}; only Grafana Admins can update the software."})
             return None
         return login
 
     def do_GET(self):
-        if self.path.rstrip("/") != "/targets":
+        path = self.path.rstrip("/")
+        if path not in ("/targets", "/update"):
             return self.send(404, {"error": "not found"})
-        if self.auth(False):
-            self.send(200, current())
+        if self.auth():
+            self.send(200, current() if path == "/targets" else update_status())
 
     def do_POST(self):
-        if self.path.rstrip("/") != "/targets":
+        path = self.path.rstrip("/")
+        if path not in ("/targets", "/update"):
             return self.send(404, {"error": "not found"})
         origin, host = self.headers.get("Origin"), self.headers.get("Host", "")
         if origin and origin.split("://", 1)[-1] != host:  # CSRF: same-origin requests only
             return self.send(403, {"error": "cross-origin request refused"})
-        user = self.auth(True)
+        user = self.auth("edit" if path == "/targets" else "admin")
         if not user:
             return
         try:
@@ -200,7 +243,7 @@ class Handler(BaseHTTPRequestHandler):
                 raise ValueError("request too large")
             body = json.loads(self.rfile.read(n) or b"{}")
             with LOCK:
-                msg = apply(body, user)
+                msg = apply(body, user) if path == "/targets" else request_update(body, user)
             print(f"{user}: {msg}", flush=True)
             self.send(200, {"ok": True, "message": msg})
         except ValueError as e:

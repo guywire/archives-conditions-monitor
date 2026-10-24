@@ -81,7 +81,10 @@ def ts(title, field, unit, y, h=9, to_f=False, desc="", minv=None, maxv=None, me
                         "tooltip": {"mode": "multi", "sort": "desc"}}}
 
 def profiles():
-    with open(ROOT / "registry" / "room_profiles.csv", encoding="utf-8") as fh:
+    path = ROOT / "registry" / "room_profiles.csv"
+    if not path.exists():  # fresh clone: site registry is git-ignored
+        path = ROOT / "registry" / "room_profiles.example.csv"
+    with open(path, encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
 
 def rules_panel(y):
@@ -425,13 +428,21 @@ def leak_air_panels(y, filt=FILTERS, per_sensor=False):
             "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "Dry", "color": OK}, "1": {"text": "WATER", "color": ALARM}}}],
                                          "color": {"mode": "fixed", "fixedColor": GREY}, "custom": {"lineWidth": 0, "fillOpacity": 85}}, "overrides": []},
             "options": {"showValue": "never", "mergeValues": True, "rowHeight": 0.8, "legend": {"showLegend": False}}}
+    occ_flux = leak_flux.replace('r._measurement == "leak" and r._field == "water"', 'r._measurement == "occupancy" and r._field == "motion"')
+    occ = {"type": "state-timeline", "title": "Presence (motion sensors)", "datasource": DS, "gridPos": {"h": 5, "w": 24, "x": 0, "y": y + 6},
+           "description": "Motion or presence sensors (PIR / mmWave, registry kind=motion). Explains short temperature/RH bumps: one person adds about 100 W and 40-70 g of water vapour an hour.",
+           "targets": [q(occ_flux)],
+           "fieldConfig": {"defaults": {"mappings": [{"type": "value", "options": {"0": {"text": "Empty", "color": "#E8ECEF"}, "1": {"text": "Motion", "color": TEMP_LINE}}}],
+                                        "color": {"mode": "fixed", "fixedColor": GREY}, "custom": {"lineWidth": 0, "fillOpacity": 85}}, "overrides": []},
+           "options": {"showValue": "never", "mergeValues": True, "rowHeight": 0.8, "legend": {"showLegend": False}}}
+    y += 5
     charts = []
     for i, (k, v) in enumerate(AQ_LIMITS.items()):
         name, unit, desc = AQ_INFO[k]
         charts.append(ts(f"{name}{' (' + unit + ')' if unit else ''}", k, {"µg/m³": "conμgm3", "ppm": "ppm"}.get(unit, "none"),
                          y + 6 + (i // 2) * 8, h=8, w=12, x=(i % 2) * 12, meas="air_quality", limits=v[1:],
                          filt=filt, per_sensor=per_sensor, desc=f"{desc}. Dashed lines: Watch {v[1]:g}, Alarm {v[2]:g}."))
-    return [leak, *charts]
+    return [leak, occ, *charts]
 
 def air_quality():
     return dash("archmon-air", "Archive Conditions — Leaks & Air Quality", [aq_table(0), *leak_air_panels(10)],
@@ -460,6 +471,58 @@ def overrides():
         return []
     with open(path, encoding="utf-8") as fh:
         return list(csv.DictReader(fh))
+
+def software_update(y):
+    """Updater (requirement F16): Business Forms panel <-> /archmon-api/update <-> scripts/update.sh on the host."""
+    ro = lambda id_, title, type_="disabled", **kw: {"id": id_, "uid": id_, "title": title, "type": type_, "section": "",
+                                                       "labelWidth": 22, "width": 0, "tooltip": "", "unit": "", "value": "", **kw}
+    elements = [ro("installed", "Installed version"), ro("latest", "Newest release"), ro("state", "State"),
+                ro("message", "Status"), ro("updated_at", "Last checked / changed"),
+                ro("notes", "What's new in the newest release", "disabledTextarea", rows=6),
+                {**ro("action", "Action", "radio"), "value": "check", "optionsSource": "Custom",
+                 "options": [{"value": "check", "label": "Check for updates now"}, {"value": "install", "label": "Install the newest release"}]},
+                ro("history", "Update history (newest first)", "disabledTextarea", rows=4),
+                ro("log", "Updater log (last lines)", "disabledTextarea", rows=6)]
+    url = "/archmon-api/update"
+    initial_code = ("const r = context.panel.response;\n"
+                    "if (r && !r.ok) {\n"
+                    "  r.json().then((b) => context.grafana.notifyError(['Software update', b.error || r.statusText])).catch(() => {});\n}")
+    update_code = ("const r = context.panel.response;\nif (!r) { return; }\n"
+                   "r.json().then((b) => {\n"
+                   "  if (r.ok) {\n    context.grafana.notifySuccess(['Software update', b.message]);\n"
+                   "    setTimeout(() => context.grafana.locationService.reload(), 4000);\n"
+                   "  } else {\n    context.grafana.notifyError(['Not started', b.error || r.statusText]);\n  }\n}).catch(() => {});")
+    form = {"type": "volkovlabs-form-panel", "title": "Software update", "gridPos": {"h": 22, "w": 16, "x": 0, "y": y},
+            "description": "Grafana Admins can check for and install new signed releases. Everyone can see the installed version.",
+            "options": {
+                "layout": {"variant": "single", "orientation": "vertical", "padding": 10},
+                "elements": elements,
+                "initial": {"method": "GET", "url": url, "contentType": "application/json", "code": initial_code,
+                            "highlight": False, "payload": {}},
+                "update": {"method": "POST", "url": url, "contentType": "application/json", "payloadMode": "all", "code": update_code,
+                           "confirm": True, "payload": {}},
+                "updateEnabled": "auto",
+                "confirmModal": {"title": "Run the software updater?", "body": "Install: takes a backup, switches to the newest signed release, "
+                                 "restarts every service (about a minute without dashboards) and rolls back automatically if the health check fails.",
+                                 "cancel": "Cancel", "confirm": "Go", "elementDisplayMode": "modified",
+                                 "columns": {"include": ["name", "newValue"], "name": "Setting", "newValue": "Value"}},
+                "submit": {"text": "Run", "icon": "sync", "variant": "primary"},
+                "reset": {"text": "Reload", "icon": "history", "variant": "secondary"},
+                "resetAction": {"mode": "initial", "confirm": False, "payload": {}},
+                "saveDefault": {"text": "Save Default", "icon": "save", "variant": "hidden"},
+                "buttonGroup": {"orientation": "left", "size": "md"},
+                "sync": True}}
+    help_md = ("**Software updates**\n\n"
+               "New versions are published as signed releases on GitHub. The server checks once a day and sends an ntfy note "
+               "when one is available.\n\n"
+               "1. Choose **Check for updates now** and press **Run** to check immediately.\n"
+               "2. To install, choose **Install the newest release**, press **Run** and confirm.\n\n"
+               "The updater runs on the server, not in Grafana: it takes a backup, installs the release, restarts the services and "
+               "checks that data is still arriving. If anything fails it goes back to the previous version by itself.\n\n"
+               "Only releases signed with the maintainer's key are installed. Room lists, targets, passwords and data are never "
+               "changed by an update. Only Grafana **Admins** can run it.")
+    text = {"type": "text", "title": "About updates", "gridPos": {"h": 22, "w": 8, "x": 16, "y": y}, "options": {"mode": "markdown", "content": help_md}}
+    return [form, text]
 
 def settings():
     """Target editor: Business Forms panel <-> config/targets_api.py (via nginx at /archmon-api/)."""
@@ -531,7 +594,7 @@ def settings():
                "Only Grafana **Editors and Admins** can save. Every change is logged with the user name (Change log section, "
                "and `registry/targets-changes.log` on the Pi).")
     text = {"type": "text", "title": "Help", "gridPos": {"h": 26, "w": 8, "x": 16, "y": 0}, "options": {"mode": "markdown", "content": help_md}}
-    d = dash("archmon-settings", "Archive Conditions — Settings", [form, text], [])
+    d = dash("archmon-settings", "Archive Conditions — Settings", [form, text, *software_update(26)], [])
     d["refresh"] = ""
     return d
 
@@ -695,7 +758,8 @@ def alerting():
                '      room: r.building + " / " + r.room, sensor_id: r.sensor_id}))\n  |> group(columns: ["room", "sensor_id"])')
     offline = offline.replace('r._measurement == "environment" and r._field == "temperature_c" and',
                               '((r._measurement == "environment" and r._field == "temperature_c") or (r._measurement == "leak" and r._field == "water")'
-                              ' or (r._measurement == "air_quality" and r._field == "status")) and')
+                              ' or (r._measurement == "air_quality" and r._field == "status")'
+                              ' or (r._measurement == "occupancy" and r._field == "motion")) and')
     def aq_rule(uid, title, thr, dur, sev):
         why = " + ".join(f'(if exists r.{k}_status and r.{k}_status > {thr - 1.0} then "{AQ_INFO[k][0]} high " else "")' for k in AQ_LIMITS)
         a = (f'import "strings"\nfrom(bucket: "{B}")\n  |> range(start: -15m)\n'
@@ -716,6 +780,12 @@ def alerting():
             '  |> group(columns: ["building", "room", "sensor_id"])\n  |> max()\n'
             '  |> map(fn: (r) => ({_time: now(), _value: float(v: r._value), room: r.building + " / " + r.room, sensor_id: r.sensor_id}))\n'
             '  |> group(columns: ["room", "sensor_id"])')
+    web = (f'from(bucket: "{B}")\n  |> range(start: -45m)\n'
+           '  |> filter(fn: (r) => r._measurement == "web_probe" and r._field == "ok")\n  |> toFloat()\n'
+           '  |> group(columns: ["target", "host"])\n'
+           '  |> reduce(identity: {n: 0.0, s: 0.0}, fn: (r, accumulator) => ({n: accumulator.n + 1.0, s: accumulator.s + r._value}))\n'
+           '  |> map(fn: (r) => ({_time: now(), _value: if r.n >= 2.0 then r.s / r.n * 100.0 else 100.0, room: "Website · " + r.target, host: r.host}))\n'
+           '  |> group(columns: ["room", "host"])')
     rules = [
         {"uid": "archmon-water-leak", "title": "Water leak", "condition": "C", "for": "0s",
          "noDataState": "OK", "execErrState": "Error", "labels": {"severity": "alarm", "cause": "WATER DETECTED"},
@@ -769,6 +839,13 @@ def alerting():
                               '  |> map(fn: (r) => ({_time: now(), _value: if r.n >= 44.0 then r.lo else 0.0, room: r.building + " / " + r.room}))\n  |> group(columns: ["room"])', 172800),
                   expr("B", {"type": "reduce", "expression": "A", "reducer": "last", "settings": {"mode": "dropNN"}}),
                   expr("C", {"type": "threshold", "expression": "B", "conditions": [{"evaluator": {"type": "gt", "params": [65]}}]})]},
+        {"uid": "archmon-website-failing", "title": "Website check failing", "condition": "C", "for": "0s",
+         "noDataState": "OK", "execErrState": "Error", "labels": {"severity": "watch", "cause": "website check failing"},
+         "annotations": {"summary": "{{ $labels.room }}: website check failing",
+                         "description": 'Only {{ printf "%.0f" $values.B.Value }} % of checks of {{ $labels.host }} succeeded in the last 45 min. See the Website dashboard; check from another network before contacting the web host.'},
+         "data": [flux_q("A", web, 2700),
+                  expr("B", {"type": "reduce", "expression": "A", "reducer": "last", "settings": {"mode": "dropNN"}}),
+                  expr("C", {"type": "threshold", "expression": "B", "conditions": [{"evaluator": {"type": "lt", "params": [50]}}]})]},
         {"uid": "archmon-sensor-stuck", "title": "Sensor needs checking", "condition": "C", "for": "0s",
          "noDataState": "OK", "execErrState": "Error", "labels": {"severity": "sensor", "cause": "sensor reading stuck"},
          "annotations": {"summary": "{{ $labels.room }}: sensor reading stuck",
